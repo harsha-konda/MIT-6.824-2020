@@ -9,8 +9,9 @@ package mr
 // and reply for an RPC.
 //
 const (
-	Map    = "Map"
-	Reduce = "Reduce"
+	Map        = "Map"
+	Reduce     = "Reduce"
+	WaitForMap = "WaitForMap"
 )
 
 type RequestJobArgs struct {

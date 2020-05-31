@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"sort"
 	"strconv"
@@ -42,29 +43,28 @@ func Worker(mapf func(string, string) []KeyValue,
 
 		go func() {
 			job = GetJob()
-			fmt.Println("job", job)
+			fmt.Println("job", job, os.Getpid())
 			ch <- "success"
 		}()
 
 		select {
-		case res := <-ch:
-			fmt.Println("job", res)
+		case <-ch:
+			{
+				switch job.Phase {
+				case Map:
+					DoMap(job.FileName, job.I, job.NumReduce, mapf)
+					SendJobStatus("m"+strconv.Itoa(job.I), job.Phase, job.I)
+				case Reduce:
+					DoReduce(job.FileName, job.I, job.NumMap, job.NumReduce, reducef)
+					SendJobStatus("r"+strconv.Itoa(job.I), job.Phase, job.I)
+					fmt.Println("reduce", job)
+				}
+			}
 		case <-time.After(10 * time.Second):
 			fmt.Println("master failed to respond")
-			return
-		}
-
-		switch job.Phase {
-		case Map:
-			DoMap(job.FileName, job.I, job.NumReduce, mapf)
-			SendJobStatus("m" + strconv.Itoa(job.I))
-		case Reduce:
-			DoReduce(job.FileName, job.I, job.NumMap, job.NumReduce, reducef)
-			SendJobStatus("r" + strconv.Itoa(job.I))
-
+			break
 		}
 	}
-
 }
 
 //
@@ -79,7 +79,7 @@ func GetJob() *RequestJobReply {
 	return &reply
 }
 
-func SendJobStatus(i string) {
+func SendJobStatus(i string, s string, I int) {
 	args := SendJobStatusArgs{I: i}
 	reply := SendJobStatusReply{}
 	call("Master.AckJob", &args, &reply)
@@ -87,19 +87,14 @@ func SendJobStatus(i string) {
 
 func DoMap(file string, mapTaskNumber int, nReduce int, mapF func(string, string) []KeyValue) {
 
-	r, _ := os.Open(file)
-	defer r.Close()
-
 	fileMap := make(map[string][]KeyValue)
-	scanner := bufio.NewScanner(r)
-	for scanner.Scan() {
-		line := scanner.Text()
-		for _, kv := range mapF(file, line) {
-			key := kv.Key
-			r := ihash(key) % nReduce
-			fileName := mFileName(mapTaskNumber, r)
-			fileMap[fileName] = append(fileMap[fileName], kv)
-		}
+	content, _ := ioutil.ReadFile(file)
+
+	for _, kv := range mapF(file, string(content)) {
+		key := kv.Key
+		r := ihash(key) % nReduce
+		fileName := mFileName(mapTaskNumber, r)
+		fileMap[fileName] = append(fileMap[fileName], kv)
 	}
 
 	for i := range fileMap {
@@ -116,6 +111,7 @@ func writeMaps(fileName string, kvs []KeyValue) {
 			log.Fatal(error)
 		}
 	}
+	f.Close()
 }
 
 func DoReduce(file string, taskNumber int, nMaps int, nReduce int, reducef func(string, []string) string) {
@@ -134,7 +130,11 @@ func getReduceInput(taskNumber int, nMaps int) []KeyValue {
 
 	for i := 0; i < nMaps; i++ {
 		fileName := mFileName(i, taskNumber)
-		r, _ := os.Open(fileName)
+
+		r, err := os.Open(fileName)
+		if err != nil {
+			continue
+		}
 		defer r.Close()
 
 		dec := json.NewDecoder(r)
@@ -155,6 +155,7 @@ func getReduceInput(taskNumber int, nMaps int) []KeyValue {
 func writeReduceFile(fileName string, results []KeyValue, reducef func(string, []string) string) {
 	var i, j int = 0, 0
 	f := openWriter(fileName)
+	w := bufio.NewWriter(f)
 	for {
 		if i >= len(results) {
 			break
@@ -167,18 +168,20 @@ func writeReduceFile(fileName string, results []KeyValue, reducef func(string, [
 		}
 
 		val := reducef(key, slice)
-		fmt.Fprintf(f, "%v %v\n", key, val)
+
+		fmt.Fprintf(w, "%v %v\n", key, val)
+		w.Flush()
+
 		i = j
 	}
 }
 
 func openWriter(file string) *os.File {
-	f, err := os.OpenFile(file, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-
+	os.Remove(file)
+	f, err := os.Create(file)
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	return f
 }
 
@@ -188,7 +191,7 @@ func mFileName(mapNumber int, reduceNumber int) string {
 }
 
 func rFileName(reduceNumber int) string {
-	return "mr-out-" + strconv.Itoa(reduceNumber)
+	return "mr-out" + strconv.Itoa(reduceNumber)
 }
 
 //

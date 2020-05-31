@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 )
 import "net"
@@ -23,7 +24,9 @@ type Master struct {
 	//sync variable
 	fileIndexChan chan int
 	//taskTracker map[int]chan string
-	taskStatus map[string]bool
+	mapTaskStatus    map[string]bool
+	reduceTaskStatus map[string]bool
+	mu               sync.Mutex
 }
 
 // Your code here -- RPC handlers for the worker to call.
@@ -48,7 +51,7 @@ func (m *Master) performMap() {
 	for i := 0; i < len(m.files); i++ {
 		m.fileIndexChan <- i
 	}
-	m.phase = Reduce
+	time.Sleep(5 * time.Second)
 }
 
 func (m *Master) performReduce() {
@@ -60,7 +63,15 @@ func (m *Master) performReduce() {
 
 func (m *Master) AckJob(sendJobStatusArgs *SendJobStatusArgs, sendJobStatusReply *SendJobStatusReply) error {
 	i := sendJobStatusArgs.I
-	m.taskStatus[i] = true
+	if m.phase != Reduce {
+		m.mu.Lock()
+		m.mapTaskStatus[i] = true
+		m.mu.Unlock()
+	} else {
+		m.mu.Lock()
+		m.reduceTaskStatus[i] = true
+		m.mu.Unlock()
+	}
 	return nil
 }
 
@@ -70,6 +81,8 @@ func (m *Master) GiveJob(requestJobArgs *RequestJobArgs, requestJobReply *Reques
 		m.GiveMapJob(requestJobArgs, requestJobReply)
 	case Reduce:
 		m.GiveReduceJob(requestJobArgs, requestJobReply)
+	case WaitForMap:
+		time.Sleep(1 * time.Second)
 	}
 	return nil
 }
@@ -87,7 +100,7 @@ func (m *Master) GiveMapJob(requestJobArgs *RequestJobArgs, requestJobReply *Req
 
 		requestJobReply.I = index
 
-		go m.trackTimeOut(index)
+		go m.trackTimeOut(index, m.phase)
 	} else {
 		requestJobReply.Done = true
 	}
@@ -104,22 +117,35 @@ func (m *Master) GiveReduceJob(requestJobArgs *RequestJobArgs, requestJobReply *
 		requestJobReply.NumMap = m.nMapTasks
 		requestJobReply.I = index
 
-		//go m.trackTimeOut(file)
+		go m.trackTimeOut(index, m.phase)
+
 	} else {
-		requestJobReply.Done = true
+		log.Fatal("something fucked up")
 	}
 }
+func (m *Master) getValue(job int, phase string) bool {
 
-func (m *Master) trackTimeOut(job int) {
+	if phase != Reduce {
+		return m.mapTaskStatus["m"+strconv.Itoa(job)]
+	} else {
+		return m.reduceTaskStatus["r"+strconv.Itoa(job)]
+	}
+}
+func (m *Master) trackTimeOut(job int, phase string) {
 	c := make(chan bool, 1)
 	go func() {
-		//<- m.taskTracker[job]
+		for {
+			val := m.getValue(job, phase)
+			if val {
+				break
+			}
+			time.Sleep(1 * time.Second)
+		}
 		c <- true
 	}()
 
 	select {
 	case <-c:
-		fmt.Println("succcess %d", job)
 	case <-time.After(10 * time.Second):
 		fmt.Println("task timeout")
 		m.fileIndexChan <- job
@@ -150,7 +176,18 @@ func (m *Master) server() {
 func (m *Master) trackSuccess() {
 	for {
 		var outcome = true
-		for _, v := range m.taskStatus {
+		for _, v := range m.mapTaskStatus {
+			outcome = outcome && v
+		}
+
+		if outcome {
+			m.phase = Reduce
+		} else {
+			time.Sleep(2 * time.Second)
+			continue
+		}
+
+		for _, v := range m.reduceTaskStatus {
 			outcome = outcome && v
 		}
 
@@ -174,19 +211,20 @@ func (m *Master) Done() bool {
 func MakeMaster(files []string, nReduce int) *Master {
 	nMapTasks := len(files)
 	m := Master{
-		files:         files,
-		nMapTasks:     nMapTasks,
-		nReduceTasks:  nReduce,
-		phase:         Map,
-		fileIndexChan: make(chan int),
-		taskStatus:    make(map[string]bool),
+		files:            files,
+		nMapTasks:        nMapTasks,
+		nReduceTasks:     nReduce,
+		phase:            Map,
+		fileIndexChan:    make(chan int, nReduce),
+		mapTaskStatus:    make(map[string]bool),
+		reduceTaskStatus: make(map[string]bool),
 	}
 	for i := 0; i < nMapTasks; i++ {
-		m.taskStatus["m"+strconv.Itoa(i)] = false
+		m.mapTaskStatus["m"+strconv.Itoa(i)] = false
 	}
 
 	for i := 0; i < nReduce; i++ {
-		m.taskStatus["r"+strconv.Itoa(i)] = false
+		m.reduceTaskStatus["r"+strconv.Itoa(i)] = false
 	}
 
 	go m.schedule()
