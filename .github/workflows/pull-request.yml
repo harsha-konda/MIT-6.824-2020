@@ -1,7 +1,6 @@
 on: [pull_request]
 
 name: ChatGPT CodeReview
-
 jobs:
   chatgpt_comment:
     runs-on: self-hosted 
