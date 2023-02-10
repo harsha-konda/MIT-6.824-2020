@@ -4,7 +4,7 @@ name: ChatGPT CodeReview
 
 jobs:
   chatgpt_comment:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted 
     name: Let chatgpt comment on your PR.
     steps:
       - name: ChatGPT comment
