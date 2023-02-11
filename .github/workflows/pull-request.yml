@@ -9,7 +9,7 @@ jobs:
     name: Let chatgpt comment on your PR.
     steps:
       - name: Create annotation for build error
-        run: echo "token crap ${{env.SESSION_TOKEN}}  $crap"
+        run: echo "token crap $SESSION_TOKEN  $crap"
       - name: ChatGPT comment
         uses: kxxt/chatgpt-action@v0.3
         id: chatgpt
