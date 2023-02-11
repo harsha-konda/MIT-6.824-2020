@@ -16,5 +16,6 @@ jobs:
           number: ${{ github.event.pull_request.number }}
           sessionToken: ${{ secrets.CHATGPT_SESSION_TOKEN }}
           split: 'yolo'  # Use true to enable the unstable split feature.
-        env: #          CHATGPT_SESSION_TOKEN: ${{ secrets.CHATGPT_SESSION_TOKEN }}
+        env:
+          CHATGPT_SESSION_TOKEN: ${{ secrets.CHATGPT_SESSION_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
