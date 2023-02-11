@@ -9,7 +9,7 @@ jobs:
     name: Let chatgpt comment on your PR.
     steps:
       - name: Create annotation for build error
-        run: echo "token crap ${{CHATGPT_SESSION_TOKEN}}  $crap"
+        run: echo "token crap ${{env.SESSION_TOKEN}}  $crap"
       - name: ChatGPT comment
         uses: kxxt/chatgpt-action@v0.3
         id: chatgpt
@@ -18,6 +18,6 @@ jobs:
           sessionToken: ${{ secrets.CHATGPT_SESSION_TOKEN }}
           split: 'yolo'  # Use true to enable the unstable split feature.
         env:
-          CHATGPT_SESSION_TOKEN: ${{secrets.CHATGPT_SESSION_TOKEN}}
+          SESSION_TOKEN: ${{ secrets.CHATGPT_SESSION_TOKEN }}
           CRAP: 1
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
