@@ -2,10 +2,11 @@ on: [pull_request]
 
 name: ChatGPT CodeReview
 
+
 jobs:
   chatgpt_comment:
     runs-on: self-hosted 
-    environment: default
+    environment: chatgpt
     name: Let chatgpt comment on your PR.
     steps:
       - name: ChatGPT comment
@@ -16,4 +17,5 @@ jobs:
           sessionToken: ${{ secrets.CHATGPT_SESSION_TOKEN }}
           split: 'yolo'  # Use true to enable the unstable split feature.
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CHATGPT_SESSION_TOKEN: ${{ secrets.CHATGPT_SESSION_TOKEN }}
+	  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

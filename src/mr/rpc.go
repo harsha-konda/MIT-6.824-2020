@@ -8,14 +8,29 @@ package mr
 // example to show how to declare the arguments
 // and reply for an RPC.
 //
+const (
+	Map        = "Map"
+	Reduce     = "Reduce"
+	WaitForMap = "WaitForMap"
+)
 
-type ExampleArgs struct {
-	X int
+type RequestJobArgs struct {
+}
+type RequestJobReply struct {
+	Phase     string
+	I         int
+	NumMap    int
+	NumReduce int
+	FileName  string
+
+	Done bool
 }
 
-type ExampleReply struct {
-	Y int
+type SendJobStatusArgs struct {
+	I string
+}
+
+type SendJobStatusReply struct {
 }
 
 // Add your RPC definitions here.
-
