@@ -6,7 +6,6 @@ name: ChatGPT CodeReview
 jobs:
   chatgpt_comment:
     runs-on: self-hosted
-    environment: chatgpt
     name: Let chatgpt comment on your PR.
     steps:
       - name: ChatGPT comment
